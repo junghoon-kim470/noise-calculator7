@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>집회 소음 계산기</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+      max-width: 500px;
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.5em;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+    }
+    select, input, button {
+      width: 100%;
+      padding: 12px;
+      font-size: 1em;
+      margin-top: 5px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      margin-top: 20px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #result, #standard {
+      margin-top: 25px;
+      font-weight: bold;
+      white-space: pre-line;
+      background-color: #fff;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <h1>집회 소음 계산기</h1>
+
+  <label for="location">소음 장소:</label>
+  <select id="location">
+    <option value="residential">주거지역, 학교, 병원</option>
+    <option value="library">공공도서관</option>
+    <option value="other">그 밖의 지역</option>
+  </select>
+
+  <label for="time">시간대:</label>
+  <select id="time">
+    <option value="day">주간 (07:00~해지기 전)</option>
+    <option value="night">야간 (해진 후~24:00)</option>
+    <option value="late">심야 (00:00~07:00)</option>
+  </select>
+
+  <label for="type">소음 유형:</label>
+  <select id="type">
+    <option value="leq">등가소음도 (Leq)</option>
+    <option value="lmax">최고소음도 (Lmax)</option>
+  </select>
+
+  <div id="standard">기준값: -</div>
+
+  <label for="leq">집회 소음 (dB):</label>
+  <input type="number" id="leq" step="0.1" min="0" max="150" />
+
+  <label for="background">배경 소음 (dB):</label>
+  <input type="number" id="background" step="0.1" min="0" max="150" />
+
+  <button onclick="calculate()">계산하기</button>
+
+  <div id="result"></div>
+
+  <script>
+    const standards = {
+      leq: {
+        residential: { day: 60, night: 50, late: 45 },
+        library: { day: 60, night: 55, late: 55 },
+        other: { day: 70, night: 60, late: 60 }
+      },
+      lmax: {
+        residential: { day: 80, night: 70, late: 65 },
+        library: { day: 80, night: 75, late: 75 },
+        other: { day: 90, night: 90, late: 90 }
+      }
+    };
+
+    const correctionTable = {
+      3.0: -3.0, 3.1: -2.9, 3.2: -2.8, 3.3: -2.7, 3.4: -2.7, 3.5: -2.6,
+      3.6: -2.5, 3.7: -2.4, 3.8: -2.3, 3.9: -2.3, 4.0: -2.2, 4.1: -2.1,
+      4.2: -2.1, 4.3: -2.0, 4.4: -2.0, 4.5: -1.9, 4.6: -1.8, 4.7: -1.8,
+      4.8: -1.7, 4.9: -1.7, 5.0: -1.7, 5.1: -1.6, 5.2: -1.6, 5.3: -1.5,
+      5.4: -1.5, 5.5: -1.4, 5.6: -1.4, 5.7: -1.4, 5.8: -1.3, 5.9: -1.3,
+      6.0: -1.3, 6.1: -1.2, 6.2: -1.2, 6.3: -1.2, 6.4: -1.1, 6.5: -1.1,
+      6.6: -1.1, 6.7: -1.0, 6.8: -1.0, 6.9: -1.0, 7.0: -1.0, 7.1: -0.9,
+      7.2: -0.9, 7.3: -0.9, 7.4: -0.9, 7.5: -0.9, 7.6: -0.8, 7.7: -0.8,
+      7.8: -0.8, 7.9: -0.8, 8.0: -0.7, 8.1: -0.7, 8.2: -0.7, 8.3: -0.7,
+      8.4: -0.7, 8.5: -0.7, 8.6: -0.6, 8.7: -0.6, 8.8: -0.6, 8.9: -0.6,
+      9.0: -0.6, 9.1: -0.6, 9.2: -0.6, 9.3: -0.5, 9.4: -0.5, 9.5: -0.5,
+      9.6: -0.5, 9.7: -0.5, 9.8: -0.5, 9.9: -0.5
+    };
+
+    function updateStandard() {
+      const location = document.getElementById("location").value;
+      const time = document.getElementById("time").value;
+      const type = document.getElementById("type").value;
+      const background = parseFloat(document.getElementById("background").value);
+
+      let standardValue = standards[type][location][time];
+
+      if (!isNaN(background)) {
+        if (type === "leq" && background > standardValue) {
+          standardValue = Math.ceil(background);
+        } else if (type === "lmax" && background > standards["leq"][location][time]) {
+          standardValue = Math.ceil(background) + 20;
+        }
+      }
+
+      document.getElementById("standard").innerText = `기준값: ${standardValue} dB`;
+    }
+
+    function calculate() {
+      updateStandard();
+
+      const leq = parseFloat(document.getElementById('leq').value);
+      const background = parseFloat(document.getElementById('background').value);
+      const type = document.getElementById("type").value;
+      const location = document.getElementById("location").value;
+      const time = document.getElementById("time").value;
+
+      if (isNaN(leq) || isNaN(background)) {
+        document.getElementById('result').innerText = '숫자를 정확히 입력해 주세요.';
+        document.getElementById('result').style.backgroundColor = "#fff";
+        return;
+      }
+
+      const diff = parseFloat((leq - background).toFixed(1));
+      if (diff < 3) {
+        document.getElementById('result').innerText = `차이: ${diff} dB\n측정 불가 (차이가 3 dB 미만)`;
+        document.getElementById('result').style.backgroundColor = "#fff";
+        return;
+      }
+
+      let correction = 0;
+      if (diff >= 3 && diff <= 9.9) {
+        correction = correctionTable[diff] || 0;
+      }
+
+      const result = diff >= 10
+        ? Math.round(leq)
+        : Math.round(leq + correction);
+
+      // 기준값 가져오기
+      let standardValue = standards[type][location][time];
+      if (type === "leq" && background > standardValue) {
+        standardValue = Math.ceil(background);
+      } else if (type === "lmax" && background > standards["leq"][location][time]) {
+        standardValue = Math.ceil(background) + 20;
+      }
+
+      // 결과 텍스트
+      let resultText =
+        `차이: ${diff} dB\n보정치: ${correction.toFixed(1)} dB\n대상 소음: ${result} dB`;
+
+      // 기준 초과 시 강조
+      if (result > standardValue) {
+        document.getElementById('result').style.backgroundColor = '#ffe0e0';
+        resultText += `\n\n**기준 초과!**`;
+      } else {
+        document.getElementById('result').style.backgroundColor = '#ffffff';
+      }
+
+      document.getElementById('result').innerText = resultText;
+    }
+
+    document.getElementById('location').addEventListener('change', updateStandard);
+    document.getElementById('time').addEventListener('change', updateStandard);
+    document.getElementById('type').addEventListener('change', updateStandard);
+    document.getElementById('background').addEventListener('input', updateStandard);
+    window.onload = updateStandard;
+  </script>
+</body>
+</html>
