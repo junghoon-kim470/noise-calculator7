@@ -138,8 +138,10 @@
         if (type === 'leq' && background > value) {
           value = Math.ceil(background);
         }
-        if (type === 'lmax' && background > standards["leq"][location][time]) {
-          value = Math.ceil(background) + 20;
+        if (type === 'lmax') {
+          const leqStandard = standards["leq"][location][time];
+          const dynamicLmax = background > leqStandard ? Math.ceil(background) + 20 : value;
+          value = Math.max(standards["lmax"][location][time], dynamicLmax);
         }
       }
 
@@ -176,13 +178,16 @@
       const location = document.getElementById("location").value;
       const time = document.getElementById("time").value;
       const type = document.getElementById("type").value;
+      const leqStandard = standards["leq"][location][time];
       let standardValue = standards[type][location][time];
 
-      if (type === 'leq' && background > standardValue) {
+      if (type === 'leq' && background > leqStandard) {
         standardValue = Math.ceil(background);
       }
-      if (type === 'lmax' && background > standards["leq"][location][time]) {
-        standardValue = Math.ceil(background) + 20;
+
+      if (type === 'lmax') {
+        const dynamicLmax = background > leqStandard ? Math.ceil(background) + 20 : standardValue;
+        standardValue = Math.max(standards["lmax"][location][time], dynamicLmax);
       }
 
       const isExceeded = result > standardValue;
